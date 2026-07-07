@@ -33,7 +33,6 @@ def main() -> None:
         OUTPUT_PATH,
         resolution=INPUT_RESOLUTION,
         block_size=(2**16, 2**16, 2**10),
-        cloudvolume_kwargs=dict(parallel=20, lru_bytes=1e9, use_https=True),
     )
 
 

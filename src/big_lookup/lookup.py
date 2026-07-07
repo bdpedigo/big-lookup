@@ -33,7 +33,6 @@ def lookup_supervoxels(
     y_col: str = "y",
     z_col: str = "z",
     extra_cols: Sequence[str] | None = None,
-    cloudvolume_kwargs: dict | None = None,
 ) -> None:
     """Look up the supervoxel id for every point in ``input_path``.
 
@@ -64,9 +63,6 @@ def lookup_supervoxels(
         Optional list of additional input column names to carry through, untouched,
         to the output. These are passthrough only and are never used in any
         computation.
-    cloudvolume_kwargs :
-        Optional keyword arguments used to construct the ``CloudVolume`` when ``cv``
-        is a source path. Ignored when ``cv`` is already a ``CloudVolume`` instance.
     """
     resolution = np.asarray(resolution, dtype=np.float64)
     block_size = np.asarray(block_size, dtype=np.int64)
@@ -78,7 +74,7 @@ def lookup_supervoxels(
     out_dir = AnyPath(output_path)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    cv = _resolve_cloudvolume(cv, cloudvolume_kwargs)
+    cv = _resolve_cloudvolume(cv)
 
     # Segmentation voxel resolution (nm) at the CloudVolume's active mip, and the
     # segmentation chunk shape (voxels) used for the intra-block chunk-coherent sort.
@@ -158,20 +154,18 @@ def lookup_supervoxels(
         )
 
 
-def _resolve_cloudvolume(cv, cloudvolume_kwargs=None):
+def _resolve_cloudvolume(cv):
     """Return ``cv`` unchanged if it is already a CloudVolume, else build one.
 
     A string (or path-like) is interpreted as a segmentation source and passed to
-    ``CloudVolume(...)`` along with ``cloudvolume_kwargs``. Anything else is assumed
-    to already be a usable volume.
+    ``CloudVolume(...)``. Construction kwargs are fixed internally for now (they may
+    depend on the parallelization backend); safe ones can be re-exposed later.
+    Anything else is assumed to already be a usable volume.
     """
     if isinstance(cv, (str, bytes)) or hasattr(cv, "__fspath__"):
         from cloudvolume import CloudVolume
 
-        kwargs = {"use_https": True}
-        if cloudvolume_kwargs:
-            kwargs.update(cloudvolume_kwargs)
-        return CloudVolume(str(cv), **kwargs)
+        return CloudVolume(str(cv), use_https=True)
     return cv
 
 
