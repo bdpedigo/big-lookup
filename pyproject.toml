@@ -1,0 +1,29 @@
+[project]
+dependencies = [
+    "cloud-volume>=8.0",
+    "cloudpathlib[gs,s3]>=0.18",
+    "deltalake>=0.17",
+    "numpy>=1.24",
+    "polars>=1.0",
+]
+description = "Distributed point -> supervoxel lookup over parquet / delta lake"
+name = "big-lookup"
+readme = "README.md"
+requires-python = ">=3.11"
+version = "0.1.0"
+
+[project.optional-dependencies]
+examples = ["caveclient>=7.0"]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/big_lookup"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

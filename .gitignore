@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+.DS_Store
+
+# local data 
+/data/test_output_points
