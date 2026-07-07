@@ -91,20 +91,27 @@ def lookup_supervoxels(
     voxel_factor = seg_resolution / resolution
 
     extra_cols = list(extra_cols) if extra_cols is not None else []
-    frame = _scan_points(input_path, x_col, y_col, z_col, extra_cols)
 
-    # Materialize voxel coords + block/sort keys once for partitioning.
-    frame = frame.with_columns(
-        (pl.col(x_col) / voxel_factor[0]).floor().cast(pl.Int64).alias("vx"),
-        (pl.col(y_col) / voxel_factor[1]).floor().cast(pl.Int64).alias("vy"),
-        (pl.col(z_col) / voxel_factor[2]).floor().cast(pl.Int64).alias("vz"),
-    ).with_columns(
-        (pl.col("vx") // block_size[0]).alias("bx"),
-        (pl.col("vy") // block_size[1]).alias("by"),
-        (pl.col("vz") // block_size[2]).alias("bz"),
+    # Raw-coordinate width of one block per axis: block_size (voxels) * voxel_factor
+    # (raw units per voxel). Because block/voxel are affine maps of the raw coords,
+    # the block key b maps to the exact half-open raw interval [b*step, (b+1)*step);
+    # filtering on the *raw* columns (not derived keys) lets polars push the
+    # predicate into the parquet scan and prune row groups / files.
+    step = block_size.astype(np.float64) * voxel_factor
+
+    # Enumerate occupied blocks in one scan. bx = floor(vx / block_size) reduces to
+    # floor(x / step) by the nested-floor identity floor(floor(a)/n) == floor(a/n).
+    blocks = (
+        _scan_points(input_path, x_col, y_col, z_col, [])
+        .select(
+            (pl.col(x_col) / step[0]).floor().cast(pl.Int64).alias("bx"),
+            (pl.col(y_col) / step[1]).floor().cast(pl.Int64).alias("by"),
+            (pl.col(z_col) / step[2]).floor().cast(pl.Int64).alias("bz"),
+        )
+        .unique()
+        .sort("bx", "by", "bz")
+        .collect()
     )
-
-    blocks = frame.select("bx", "by", "bz").unique().sort("bx", "by", "bz").collect()
 
     n_blocks = blocks.height
     for i, (bx, by, bz) in enumerate(blocks.iter_rows()):
@@ -113,9 +120,24 @@ def lookup_supervoxels(
             print(f"[{i + 1}/{n_blocks}] block ({bx},{by},{bz}) exists, skipping")
             continue
 
+        lo = np.array([bx, by, bz], dtype=np.float64) * step
+        hi = lo + step
+
         block = (
-            frame.filter(
-                (pl.col("bx") == bx) & (pl.col("by") == by) & (pl.col("bz") == bz)
+            # Fresh filtered scan on RAW columns -> predicate pushdown / pruning.
+            _scan_points(input_path, x_col, y_col, z_col, extra_cols)
+            .filter(
+                (pl.col(x_col) >= lo[0])
+                & (pl.col(x_col) < hi[0])
+                & (pl.col(y_col) >= lo[1])
+                & (pl.col(y_col) < hi[1])
+                & (pl.col(z_col) >= lo[2])
+                & (pl.col(z_col) < hi[2])
+            )
+            .with_columns(
+                (pl.col(x_col) / voxel_factor[0]).floor().cast(pl.Int64).alias("vx"),
+                (pl.col(y_col) / voxel_factor[1]).floor().cast(pl.Int64).alias("vy"),
+                (pl.col(z_col) / voxel_factor[2]).floor().cast(pl.Int64).alias("vz"),
             )
             # chunk-coherent sort: keep each worker's live chunk set to a local band
             .with_columns(

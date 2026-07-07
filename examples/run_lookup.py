@@ -25,6 +25,7 @@ def main() -> None:
     out_dir = Path(OUTPUT_PATH)
     if out_dir.exists():
         shutil.rmtree(out_dir)
+        print("Removed existing output folder:", out_dir)
 
     lookup_supervoxels(
         INPUT_PATH,
@@ -32,7 +33,7 @@ def main() -> None:
         OUTPUT_PATH,
         resolution=INPUT_RESOLUTION,
         block_size=(2**16, 2**16, 2**10),
-        cloudvolume_kwargs=dict(parallel=20, lru_bytes=1e9, cache=True, use_https=True),
+        cloudvolume_kwargs=dict(parallel=20, lru_bytes=1e9, use_https=True),
     )
 
 

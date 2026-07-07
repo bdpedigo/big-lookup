@@ -525,6 +525,19 @@ These extend the four-stage core and are to be refactored into discrete feature 
       output location, and the final per-block supervoxel results could **overwrite exactly
       those temp files** — so the temp data is deleted precisely when it becomes obsolete,
       with no separate cleanup step. Worth exploring.
+- **Lance format IO** — add [Lance](https://lancedb.github.io/lance/) as a third read/write
+  format alongside parquet / delta lake, plugging into the same scan (`_scan_points`) and write
+  (`_write_block`) seams. Lance is attractive here for two reasons that line up with the design:
+  its **fast random access + zone-map / pushdown filtering** suit v0's per-block filtered scans
+  (a block's bounding-box predicate prunes to a few fragments rather than a full scan, the same
+  property v0 relies on for clustered parquet / delta — see
+  [v0 execution](#v0-execution-assume-spatially-clustered-or-small-input)), and its
+  **fragment-level writes + dataset versioning** fit the one-file(fragment)-per-block,
+  idempotent, resumable output model (see [Output & resumability](#output--resumability)).
+  polars can scan a Lance dataset (via `pl.scan_pyarrow_dataset` over `lance.dataset(...)`),
+  so the change is localized to format detection in the scan/write helpers, not the partition
+  or lookup core. Deferred, not required for v0 — parquet / delta already cover the input and
+  output contracts.
 - **KV-store sink** — replace/augment the parquet/delta write stage with a cloud KV sink.
 - **Long-lived listener** — a persistent cluster that listens for lookup requests instead of a
   one-off script run over a fixed payload.
